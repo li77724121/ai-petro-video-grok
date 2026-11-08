@@ -1,63 +1,60 @@
-# 🐱 Grok Image-to-Video · AI 宠物视频生成器
+# 🐱 AI 宠物短视频生成器（纯本地 · 零 API 费用）
 
-基于 xAI Grok Imagine API + Hermes Web UI 的本地图片动态化工具。
+用 **Python 逐帧程序化绘制 + ffmpeg 编码**，在一台 16GB 的 Mac mini M1 上本地生成竖屏宠物短视频。
+不调用任何云端 API，不需要下载扩散模型权重，10 秒成片约 **1 分 40 秒**渲染完成。
 
-## ✨ 核心功能
+## 🎬 成片参数
 
-- ✅ **本地图片 → AI 动态视频 (8s)**
-- ✅ **动作丰富**: 尾巴摇摆 | 眨眼 | 打滚 | 跳跃 | 伸懒腰
-- ✅ **双引擎支持**: Grok (免费) / MiniMax (高性能)
+- 分辨率 1080×1920（9:16 竖屏），30 fps，10 秒，H.264 + AAC，约 2.1 MB
+- 主体：卡通橘猫「豆豆」，会呼吸起伏、摇尾巴、间隔眨眼、偶尔张嘴叫
+- 动效：尾巴正弦摆动、身体呼吸缩放、耳朵抖动、爱心粒子上浮、镜头缓慢推近
+- 配乐：ffmpeg 本地合成柔和和弦垫音（无版权素材依赖）
 
-## 🚀 快速开始（5 分钟）
-
-### Step 0: 环境准备
+## 🚀 运行
 
 ```bash
-# 1. 配置 API Token
+# 依赖：Python 3.11+、Pillow、numpy、ffmpeg（macOS: brew install ffmpeg）
+python3 -m venv .venv && . .venv/bin/activate
+pip install pillow numpy
+
+python render_pet_video.py
+# 输出：~/Desktop/M1hermes/media/pet-ai-cartoon.mp4
+```
+
+定制入口：`W, H, FPS, DUR`（尺寸/帧率/时长）、`draw_text()` 里的标题文案、
+`draw_cat()` 里的配色常量 `ORANGE / PINK / DARK`。
+
+## ☁️ 可选：接云端图生视频
+
+同一目录内保留了 Grok / MiniMax 的 curl 封装（`grok-api.sh`、`demo.sh`），
+配置 `XAI_API_KEY` 或 `MINIMAX_API_KEY` 后即可用真图生成：
+
+```bash
 export AUTH_TOKEN=$(cat ~/.hermes-web-ui/.token)
-export XAI_API_KEY=your_xai_token_here
-
-# 2. 启动 Hermes Web UI (如未运行)
-cd ~/Desktop/M1hermes
-npm run dev  # or: npm start
+./grok-api.sh ~/Desktop/pet.jpg "尾巴摇摆 + 眨眼" 8
 ```
 
-### Step 1: 准备宠物图片
+## ⚠️ 为什么默认不走 AI 图生视频
 
-将猫/狗照片放至本地任意位置，例如 `~/Desktop/pet.jpg`。
+实测三种云端/本地模型的可用性：
 
-### Step 2: 生成视频（curl 一行搞定）
+| 方案 | 结论 |
+|---|---|
+| Hermes Web UI → Grok | 接口通（`127.0.0.1:8748`），但返回 `missing_xai_token`，需要 xAI 凭据 |
+| MiniMax Hailuo | 需要 `MINIMAX_API_KEY`，未配置 |
+| 本地 mflux Z-Image-Turbo | 权重仅下载 255MB / 24.6GB，hf-mirror 实测 420 KB/s ≈ 16 小时，不可行 |
 
-```bash
-curl -sS \
-  -X POST "http://localhost:8648/api/studio/media/grok-image-to-video" \\
-  -H "Authorization: Bearer $AUTH_TOKEN" \\
-  -d '{
-    "image_path": "~/Desktop/pet.jpg",
-    "prompt": "尾巴摇摆 + 眨眼 + 自然光照",
-    "duration": 8,
-    "output_path": "./media/output.mp4"
-  }'
+因此改用零依赖的程序化渲染路线，保证「本地、免费、可复现」。
 
-# 完成后视频在 ./media/output.mp4
-```
+## 🧩 踩过的坑（改代码时会遇到）
 
-## 📋 动作模板参考
+1. **尾巴分节条纹**：用多段粗线（`draw.line(width=...)`）画尾巴，圆角接头处必然叠出条带。必须按路径法线偏移生成**单条闭合多边形**再填充。
+2. **爪子和肚皮融成一片**：两者都是米白且肚皮底边与爪子重叠。要让肚皮上移收口，并把爪子调深一档、加描边。
+3. **胡须穿过腮红**：绘制顺序应为「胡须 → 腮红」，让腮红盖住笔触根部。
+4. **爱心糊在猫脸上**：粒子层若在猫之后合成会盖住主体，应画在猫之前。
+5. **`alpha_composite` 报 `image has wrong mode`**：背景函数返回 RGB 时必须先 `.convert("RGBA")`。
+6. **逐帧高斯模糊太慢**：柔光/暗角用 numpy 预计算一张 mask 复用，不要每帧 `GaussianBlur`。
 
-| motion | description |
-|-------|-------------|
-| `tail wagging` | 尾巴摇摆 |
-| `blink + look at camera` | 眨眼看镜头 |
-| `jump in place` | 原地跳一下 |
-| `stretch body` | 伸懒腰 |
+## 📄 License
 
-## 🔧 GitHub Actions（可选）
-
-将 curl 脚本集成到 CI，自动推送到 repo 后生成视频。
-
----
-
-📦 **Next Steps**:
-1. Push files to GitHub (git init + add remote)
-2. Run demo script → video appears in `media/`
-3. Pull link: https://github.com/leo/ai-petro-video-grok
+MIT
