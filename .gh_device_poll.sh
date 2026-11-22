@@ -4,11 +4,13 @@ CID=178c6fc778ccc68e1d6a
 DEVICE_CODE="$1"
 OUT="$2"
 DEADLINE=$(( $(date +%s) + 880 ))
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy
+CURL="env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/curl"
 
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-  RESP=$(curl -sS --max-time 20 -X POST https://github.com/login/oauth/access_token \
+  RESP=$($CURL -sS --max-time 20 -X POST https://github.com/login/oauth/access_token \
     -H "Accept: application/json" \
-    -d "client_id=$CID&device_code=$DEVICE_CODE&grant_type=urn:ietf:params:oauth:grant-type:device_code" 2>/dev/null)
+    -d "client_id=$CID&device_code=$DEVICE_CODE&grant_type=urn:ietf:params:oauth:grant-type:device_code" 2>&1)
   case "$RESP" in
     *access_token*)
       echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])" > "$OUT"
